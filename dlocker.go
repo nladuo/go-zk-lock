@@ -1,7 +1,7 @@
 package DLocker
 
 import (
-	"github.com/nladuo/DLocker/model"
+	"github.com/nladuo/DLocker/modules"
 	"github.com/samuel/go-zookeeper/zk"
 	"log"
 	"time"
@@ -52,12 +52,12 @@ func (this *Dlocker) Lock() (isSuccess bool) {
 	if err != nil {
 		panic(err)
 	}
-	minIndex := model.GetMinIndex(chidren, this.prefix)
+	minIndex := modules.GetMinIndex(chidren, this.prefix)
 	minLockerPath := this.basePath + "/" + chidren[minIndex]
 	// if the created znode is not the minimum znode,
 	// listen for the pre-znode delete notification
 	if minLockerPath != this.lockerPath {
-		lastNodeName := model.GetLastNodeName(this.lockerPath,
+		lastNodeName := modules.GetLastNodeName(this.lockerPath,
 			this.basePath, this.prefix)
 		watchPath := this.basePath + "/" + lastNodeName
 		isExist, _, watch, err := getZkConn().ExistsW(watchPath)
@@ -65,7 +65,6 @@ func (this *Dlocker) Lock() (isSuccess bool) {
 			panic(err)
 		}
 		if isExist {
-
 			select {
 			case event := <-watch:
 				if event.Type == zk.EventNodeDeleted {

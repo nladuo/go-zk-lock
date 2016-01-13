@@ -1,5 +1,5 @@
 //some algorism
-package model
+package modules
 
 import (
 	"log"
