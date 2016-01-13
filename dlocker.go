@@ -4,19 +4,22 @@ import (
 	"github.com/nladuo/DLocker/model"
 	"github.com/samuel/go-zookeeper/zk"
 	"log"
+	"time"
 )
 
 type Dlocker struct {
 	lockerPath string
 	prefix     string
 	basePath   string
+	timeout    time.Duration
 }
 
-func NewLocker(path string, prefix string) *Dlocker {
+func NewLocker(path string, prefix string, timeout time.Duration) *Dlocker {
 
 	var locker Dlocker
 	locker.basePath = path
 	locker.prefix = prefix
+	locker.timeout = timeout
 	isExsit, _, err := getZkConn().Exists(path)
 	if err != nil {
 		panic(err.Error())
@@ -56,17 +59,30 @@ func (this *Dlocker) Lock() (isSuccess bool) {
 	if minLockerPath != this.lockerPath {
 		lastNodeName := model.GetLastNodeName(this.lockerPath,
 			this.basePath, this.prefix)
-		isExist, _, watch, err := getZkConn().ExistsW(this.basePath + "/" + lastNodeName)
+		watchPath := this.basePath + "/" + lastNodeName
+		isExist, _, watch, err := getZkConn().ExistsW(watchPath)
 		if err != nil {
 			panic(err)
 		}
 		if isExist {
-			event := <-watch
-			if event.Type == zk.EventNodeDeleted {
-				isSuccess = true
-			} else {
+
+			select {
+			case event := <-watch:
+				if event.Type == zk.EventNodeDeleted {
+					isSuccess = true
+				} else {
+					isSuccess = false
+				}
+				return
+			case <-time.After(this.timeout):
+				// if timeout, delete the watching node
+				// and delete itself
+				log.Println("timeout,delete", watchPath, "and", this.lockerPath)
+				getZkConn().Delete(watchPath, 0)
+				getZkConn().Delete(this.lockerPath, 0)
 				isSuccess = false
 			}
+
 		}
 
 	} else { // if the created node is the minimum znode, getLock success
@@ -86,7 +102,11 @@ func (this *Dlocker) Unlock() (isSuccess bool) {
 		}
 	}()
 	err := getZkConn().Delete(this.lockerPath, 0)
-	if err != nil {
+	if err == zk.ErrNoNode {
+		isSuccess = false
+		return
+	} else if err != nil {
+		log.Println(err.Error())
 		panic(err)
 	}
 	isSuccess = true

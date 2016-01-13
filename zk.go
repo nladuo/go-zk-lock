@@ -7,12 +7,9 @@ import (
 )
 
 var (
-	zkConn *zk.Conn
-	hosts  []string
-)
-
-const (
-	timeOut = 20
+	zkConn  *zk.Conn
+	hosts   []string
+	timeout time.Duration
 )
 
 func getZkConn() *zk.Conn {
@@ -20,13 +17,14 @@ func getZkConn() *zk.Conn {
 }
 
 func reConnectZk() {
-	EstablishZkConn(hosts)
+	EstablishZkConn(hosts, timeout)
 }
 
-func EstablishZkConn(hosts []string) error {
+func EstablishZkConn(hosts []string, zkTimeOut time.Duration) error {
 	var err error
+	timeout = zkTimeOut
 RECONNECT:
-	zkConn, _, err = zk.Connect(hosts, timeOut*time.Second)
+	zkConn, _, err = zk.Connect(hosts, timeout)
 	if err != nil {
 		goto RECONNECT
 	}
