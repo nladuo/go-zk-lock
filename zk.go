@@ -31,6 +31,10 @@ RECONNECT:
 	return err
 }
 
+func CreatePath(path string) {
+	getZkConn().Create(path, []byte(""), int32(0), zk.WorldACL(zk.PermAll))
+}
+
 func CloseZkConn() {
 	zkConn.Close()
 }
