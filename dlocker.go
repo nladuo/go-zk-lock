@@ -4,6 +4,7 @@ import (
 	"github.com/nladuo/DLocker/modules"
 	"github.com/samuel/go-zookeeper/zk"
 	"log"
+	"sync"
 	"time"
 )
 
@@ -12,6 +13,7 @@ type Dlocker struct {
 	prefix     string
 	basePath   string
 	timeout    time.Duration
+	innerLock  *sync.Mutex
 }
 
 func NewLocker(path string, prefix string, timeout time.Duration) *Dlocker {
@@ -20,6 +22,7 @@ func NewLocker(path string, prefix string, timeout time.Duration) *Dlocker {
 	locker.basePath = path
 	locker.prefix = prefix
 	locker.timeout = timeout
+	locker.innerLock = &sync.Mutex{}
 	isExsit, _, err := getZkConn().Exists(path)
 	if err != nil {
 		panic(err.Error())
@@ -43,6 +46,8 @@ func (this *Dlocker) Lock() (isSuccess bool) {
 			reConnectZk()
 		}
 	}()
+	this.innerLock.Lock()
+	defer this.innerLock.Unlock()
 	//create znode
 	path := this.basePath + "/" + this.prefix
 	var err error
