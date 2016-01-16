@@ -2,25 +2,36 @@
 package modules
 
 import (
-	"log"
+	"errors"
 	"strconv"
 	"strings"
 )
 
 const (
-	sequence_bit = 10
+	sequence_bit  = 10
+	err_num       = -1
+	ErrConvertMsg = "Number conversion err"
 )
+
+func getSequentialNumber(str, prefix string) int {
+
+	numStr := strings.TrimPrefix(str, prefix)
+	num, err := strconv.Atoi(numStr)
+	if err != nil {
+		return err_num
+	}
+	return num
+}
 
 func GetMinIndex(strs []string, prefix string) int {
 	index := 0
 	min := 999999999
 	for i := 0; i < len(strs); i++ {
-		strVal := strings.TrimPrefix(strs[i], prefix)
-		num, err := strconv.Atoi(strVal)
-		if err != nil {
-			log.Println("fifo.getMinIndex() , conversion err", err.Error())
-			panic(err)
+		num := getSequentialNumber(strs[i], prefix)
+		if num == err_num {
+			continue
 		}
+
 		if num < min {
 			min = num
 			index = i
@@ -30,13 +41,31 @@ func GetMinIndex(strs []string, prefix string) int {
 	return index
 }
 
+func GetStrsSequenceLessThanLocker(strs []string, basePath, prefix, lockername string) []string {
+	resultStrs := []string{}
+	resultStrs = append(resultStrs, strings.TrimPrefix(lockername, basePath+"/"))
+	lockerSeq := getSequentialNumber(lockername, basePath+"/"+prefix)
+	if lockerSeq == err_num {
+		return resultStrs
+	}
+	for i := 0; i < len(strs); i++ {
+		seq := getSequentialNumber(strs[i], prefix)
+		if seq == err_num {
+			continue
+		}
+		if seq < lockerSeq {
+			resultStrs = append(resultStrs, strs[i])
+		}
+	}
+	return resultStrs
+
+}
+
 func GetLastNodeName(lockerName, basePath, prefix string) string {
 	path := basePath + "/" + prefix
-	numStr := strings.TrimPrefix(lockerName, path)
-	num, err := strconv.Atoi(numStr)
-	if err != nil {
-		log.Println("fifo.getLastNodeName() , conversion err", err.Error())
-		panic(err)
+	num := getSequentialNumber(lockerName, path)
+	if num == err_num {
+		panic(errors.New(ErrConvertMsg))
 	}
 	lastNumStr := strconv.Itoa(num - 1)
 	numBit := 1

@@ -11,7 +11,7 @@ var (
 	hosts         []string      = []string{"127.0.0.1:2181"}
 	basePath      string        = "/locker"
 	prefix        string        = "lock-"
-	lockerTimeout time.Duration = 8 * time.Second
+	lockerTimeout time.Duration = 2 * time.Second
 	zkTimeOut     time.Duration = 20 * time.Second
 )
 

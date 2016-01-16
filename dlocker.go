@@ -79,16 +79,16 @@ func (this *Dlocker) Lock() (isSuccess bool) {
 				}
 				return
 			case <-time.After(this.timeout):
-				// if timeout, delete the watching node
-				// and delete itself
-				log.Println("timeout,delete", watchPath, "and", this.lockerPath)
-				getZkConn().Delete(watchPath, 0)
-				getZkConn().Delete(this.lockerPath, 0)
+				// if timeout, delete all the node less than created locker node
+				deleteStrs := modules.GetStrsSequenceLessThanLocker(chidren, this.basePath, this.prefix, this.lockerPath)
+				for i := 0; i < len(deleteStrs); i++ {
+					deleteStr := this.basePath + "/" + deleteStrs[i]
+					log.Println("timeout,delete", deleteStr, "")
+					getZkConn().Delete(deleteStr, 0)
+				}
 				isSuccess = false
 			}
-
 		}
-
 	} else { // if the created node is the minimum znode, getLock success
 		isSuccess = true
 	}
