@@ -11,7 +11,7 @@ var (
 	hosts         []string      = []string{"127.0.0.1:2181"}
 	basePath      string        = "/locker"
 	prefix        string        = "lock-"
-	lockerTimeout time.Duration = 2 * time.Second
+	lockerTimeout time.Duration = 1 * time.Second
 	zkTimeOut     time.Duration = 20 * time.Second
 )
 
@@ -21,7 +21,7 @@ func run(i int) {
 		for !locker.Lock() {
 		}
 		fmt.Println("gorountine ", i, " get lock")
-		time.Sleep(time.Millisecond * 10)
+		time.Sleep(time.Millisecond * 1)
 		fmt.Println("gorountine ", i, " unlock")
 		if !locker.Unlock() {
 			log.Println("gorountine ", i, "unlock failed")

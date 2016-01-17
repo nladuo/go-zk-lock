@@ -38,6 +38,7 @@ func NewLocker(path string, prefix string, timeout time.Duration) *Dlocker {
 
 func (this *Dlocker) Lock() (isSuccess bool) {
 	isSuccess = false
+
 	defer func() {
 		e := recover()
 		if e == zk.ErrConnectionClosed {
