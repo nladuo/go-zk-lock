@@ -74,7 +74,12 @@ func (this *Dlocker) Lock() (isSuccess bool) {
 			select {
 			case event := <-watch:
 				if event.Type == zk.EventNodeDeleted {
-					isSuccess = true
+					isExist, _, err = getZkConn().Exists(this.lockerPath)
+					if isExist && err == nil {
+						isSuccess = true
+					} else {
+						isSuccess = false
+					}
 				} else {
 					isSuccess = false
 				}
