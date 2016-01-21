@@ -4,6 +4,7 @@ import (
 	"github.com/nladuo/DLocker/modules"
 	"github.com/samuel/go-zookeeper/zk"
 	"log"
+	"os"
 	"sync"
 	"time"
 )
@@ -44,7 +45,7 @@ func (this *Dlocker) Lock() (isSuccess bool) {
 		if e == zk.ErrConnectionClosed {
 			//try reconnect the zk server
 			log.Println("connection closed, reconnect to the zk server")
-			reConnectZk()
+			os.Exit(-1)
 		}
 	}()
 	this.innerLock.Lock()
