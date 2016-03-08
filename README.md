@@ -29,7 +29,7 @@ locker := DLocker.NewLocker(basePath, lockerTimeout)
 ``` go
 locker.Lock() // like mutex.Lock()
 //do something of which time not excceed lockerTimeout
-if !locker.Unlock() { // like mutex.Unlock()
+if !locker.Unlock() { // like mutex.Unlock(), return false when zookeeper connection error or locker timeout
         log.Println("Sorry, unlock failed")
 }
 ```

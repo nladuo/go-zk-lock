@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -41,26 +42,6 @@ func GetMinSerialNumber(children []string, prefix string) int {
 	return index
 }
 
-func GetPathListSerialNumberLessThanLocker(children []string, basePath, prefix, lockername string) []string {
-	resultPathList := []string{}
-	resultPathList = append(resultPathList, strings.TrimPrefix(lockername, basePath+"/"))
-	lockerSeq := getSerialNumber(lockername, basePath+"/"+prefix)
-	if lockerSeq == err_num {
-		return resultPathList
-	}
-	for i := 0; i < len(children); i++ {
-		seq := getSerialNumber(children[i], prefix)
-		if seq == err_num {
-			continue
-		}
-		if seq < lockerSeq {
-			resultPathList = append(resultPathList, basePath+"/"+children[i])
-		}
-	}
-	return resultPathList
-
-}
-
 func GetLastNodeName(lockerName, basePath, prefix string) string {
 	path := basePath + "/" + prefix
 	num := getSerialNumber(lockerName, path)
@@ -69,4 +50,15 @@ func GetLastNodeName(lockerName, basePath, prefix string) string {
 	}
 	lastNumStr := fmt.Sprintf("%010d", num-1)
 	return prefix + lastNumStr
+}
+
+func CheckOutTimeOut(data []byte, timeout time.Duration) bool {
+	nowUnixTime := time.Now().Unix()
+	//get the znode create time
+	createUnixTime, err := strconv.ParseInt(string(data), 10, 64)
+	if err != nil {
+		return true
+	}
+	timeoutUnixTime := int64(createUnixTime) + int64(timeout.Seconds())
+	return timeoutUnixTime < nowUnixTime
 }

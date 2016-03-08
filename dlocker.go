@@ -4,6 +4,7 @@ import (
 	"github.com/nladuo/DLocker/modules"
 	"github.com/samuel/go-zookeeper/zk"
 	"log"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -20,7 +21,7 @@ func NewLocker(path string, timeout time.Duration) *Dlocker {
 
 	var locker Dlocker
 	locker.basePath = path
-	locker.prefix = "lock-" //the prefix of a znode, everything is okay
+	locker.prefix = "lock-" //the prefix of a znode, any string is okay.
 	locker.timeout = timeout
 	locker.innerLock = &sync.Mutex{}
 	isExsit, _, err := getZkConn().Exists(path)
@@ -36,7 +37,10 @@ func NewLocker(path string, timeout time.Duration) *Dlocker {
 
 func (this *Dlocker) createZnodePath() (string, error) {
 	path := this.basePath + "/" + this.prefix
-	return getZkConn().Create(path, []byte(""), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(zk.PermAll))
+	//save the create unixTime into znode
+	nowUnixTime := time.Now().Unix()
+	nowUnixTimeBytes := []byte(strconv.FormatInt(nowUnixTime, 10))
+	return getZkConn().Create(path, nowUnixTimeBytes, zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(zk.PermAll))
 }
 
 //get the path of minimum serial number znode from sequential children
@@ -68,26 +72,9 @@ func (this *Dlocker) Lock() {
 	}
 }
 
-//just list mutex.Unlock()
-func (this *Dlocker) Unlock() (isSuccess bool) {
-	isSuccess = false
-	defer func() {
-		e := recover()
-		if e == zk.ErrConnectionClosed {
-			//try reconnect the zk server
-			log.Println("connection closed, reconnect to the zk server")
-			reConnectZk()
-		}
-	}()
-	err := getZkConn().Delete(this.lockerPath, 0)
-	if err == zk.ErrNoNode {
-		isSuccess = false
-		return
-	} else {
-		this.checkErr(err)
-	}
-	isSuccess = true
-	return
+//just list mutex.Unlock(), return false when zookeeper connection error or locker timeout
+func (this *Dlocker) Unlock() bool {
+	return this.unlock()
 }
 
 func (this *Dlocker) lock() (isSuccess bool) {
@@ -116,7 +103,7 @@ func (this *Dlocker) lock() (isSuccess bool) {
 		isSuccess = true
 	} else {
 		// if the created znode is not the minimum znode,
-		// listen for the pre-znode delete notification
+		// listen for the last znode delete notification
 		lastNodeName := this.getLastZnodePath()
 		watchPath := this.basePath + "/" + lastNodeName
 		isExist, _, watch, err := getZkConn().ExistsW(watchPath)
@@ -140,18 +127,54 @@ func (this *Dlocker) lock() (isSuccess bool) {
 				}
 			//time out
 			case <-time.After(this.timeout):
-				// if timeout, delete all the node less than created locker node
+				// if timeout, delete the timeout znode
 				children, err := this.getPathChildren()
 				this.checkErr(err)
-				deletePathList := modules.GetPathListSerialNumberLessThanLocker(children, this.basePath, this.prefix, this.lockerPath)
-				for i := 0; i < len(deletePathList); i++ {
-					deletePath := deletePathList[i]
-					log.Println("timeout,delete", deletePath, "")
-					getZkConn().Delete(deletePath, 0)
+				for _, child := range children {
+					data, _, err := getZkConn().Get(this.basePath + "/" + child)
+					if err != nil {
+						continue
+					}
+					if modules.CheckOutTimeOut(data, this.timeout) {
+						err := getZkConn().Delete(this.basePath+"/"+child, 0)
+						if err == nil {
+							log.Println("timeout delete:", this.basePath+"/"+child)
+						}
+					}
 				}
+			}
+		} else {
+			// recheck the min znode
+			// the last znode may be deleted too fast to let the next znode cannot listen to it deletion
+			minZnodePath, err := this.getMinZnodePath()
+			this.checkErr(err)
+			if minZnodePath == this.lockerPath {
+				isSuccess = true
 			}
 		}
 	}
+
+	return
+}
+
+func (this *Dlocker) unlock() (isSuccess bool) {
+	isSuccess = false
+	defer func() {
+		e := recover()
+		if e == zk.ErrConnectionClosed {
+			//try reconnect the zk server
+			log.Println("connection closed, reconnect to the zk server")
+			reConnectZk()
+		}
+	}()
+	err := getZkConn().Delete(this.lockerPath, 0)
+	if err == zk.ErrNoNode {
+		isSuccess = false
+		return
+	} else {
+		this.checkErr(err)
+	}
+	isSuccess = true
 	return
 }
 

@@ -10,7 +10,7 @@ import (
 var (
 	hosts         []string      = []string{"127.0.0.1:2181"} // the zookeeper hosts
 	basePath      string        = "/locker"                  //the application znode path
-	lockerTimeout time.Duration = 1 * time.Minute            // the maximum time for a locker waiting
+	lockerTimeout time.Duration = 5 * time.Second            // the maximum time for a locker waiting
 	zkTimeOut     time.Duration = 20 * time.Second           // the zk connection timeout
 )
 
@@ -35,7 +35,7 @@ func run(i int) {
 		fmt.Println("gorountine", i, ": get lock")
 		//do something of which time not excceed lockerTimeout
 		fmt.Println("gorountine", i, ": unlock")
-		if !locker.Unlock() { // like mutex.Unlock()
+		if !locker.Unlock() { // like mutex.Unlock(), return false when zookeeper connection error or locker timeout
 			log.Println("gorountine", i, ": unlock failed")
 		}
 	}
