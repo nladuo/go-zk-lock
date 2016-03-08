@@ -3,19 +3,19 @@ package modules
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 )
 
 const (
-	sequence_bit  = 10
 	err_num       = -1
 	ErrConvertMsg = "Number conversion err"
 )
 
-func getSequentialNumber(str, prefix string) int {
+func getSerialNumber(path, prefix string) int {
 
-	numStr := strings.TrimPrefix(str, prefix)
+	numStr := strings.TrimPrefix(path, prefix)
 	num, err := strconv.Atoi(numStr)
 	if err != nil {
 		return err_num
@@ -23,11 +23,11 @@ func getSequentialNumber(str, prefix string) int {
 	return num
 }
 
-func GetMinIndex(strs []string, prefix string) int {
+func GetMinSerialNumber(children []string, prefix string) int {
 	index := 0
 	min := 999999999
-	for i := 0; i < len(strs); i++ {
-		num := getSequentialNumber(strs[i], prefix)
+	for i := 0; i < len(children); i++ {
+		num := getSerialNumber(children[i], prefix)
 		if num == err_num {
 			continue
 		}
@@ -41,39 +41,32 @@ func GetMinIndex(strs []string, prefix string) int {
 	return index
 }
 
-func GetStrsSequenceLessThanLocker(strs []string, basePath, prefix, lockername string) []string {
-	resultStrs := []string{}
-	resultStrs = append(resultStrs, strings.TrimPrefix(lockername, basePath+"/"))
-	lockerSeq := getSequentialNumber(lockername, basePath+"/"+prefix)
+func GetPathListSerialNumberLessThanLocker(children []string, basePath, prefix, lockername string) []string {
+	resultPathList := []string{}
+	resultPathList = append(resultPathList, strings.TrimPrefix(lockername, basePath+"/"))
+	lockerSeq := getSerialNumber(lockername, basePath+"/"+prefix)
 	if lockerSeq == err_num {
-		return resultStrs
+		return resultPathList
 	}
-	for i := 0; i < len(strs); i++ {
-		seq := getSequentialNumber(strs[i], prefix)
+	for i := 0; i < len(children); i++ {
+		seq := getSerialNumber(children[i], prefix)
 		if seq == err_num {
 			continue
 		}
 		if seq < lockerSeq {
-			resultStrs = append(resultStrs, strs[i])
+			resultPathList = append(resultPathList, basePath+"/"+children[i])
 		}
 	}
-	return resultStrs
+	return resultPathList
 
 }
 
 func GetLastNodeName(lockerName, basePath, prefix string) string {
 	path := basePath + "/" + prefix
-	num := getSequentialNumber(lockerName, path)
+	num := getSerialNumber(lockerName, path)
 	if num == err_num {
 		panic(errors.New(ErrConvertMsg))
 	}
-	lastNumStr := strconv.Itoa(num - 1)
-	numBit := 1
-	for i := num; i > 0; i /= 10 {
-		numBit++
-	}
-	for i := 0; i <= sequence_bit-numBit; i++ {
-		lastNumStr = "0" + lastNumStr
-	}
+	lastNumStr := fmt.Sprintf("%010d", num-1)
 	return prefix + lastNumStr
 }

@@ -4,7 +4,6 @@ import (
 	"github.com/nladuo/DLocker/modules"
 	"github.com/samuel/go-zookeeper/zk"
 	"log"
-	"os"
 	"sync"
 	"time"
 )
@@ -25,9 +24,7 @@ func NewLocker(path string, prefix string, timeout time.Duration) *Dlocker {
 	locker.timeout = timeout
 	locker.innerLock = &sync.Mutex{}
 	isExsit, _, err := getZkConn().Exists(path)
-	if err != nil {
-		panic(err.Error())
-	}
+	locker.checkErr(err)
 	if !isExsit {
 		log.Println("create the znode:" + path)
 		getZkConn().Create(path, []byte(""), int32(0), zk.WorldACL(zk.PermAll))
@@ -37,71 +34,41 @@ func NewLocker(path string, prefix string, timeout time.Duration) *Dlocker {
 	return &locker
 }
 
-func (this *Dlocker) Lock() (isSuccess bool) {
-	isSuccess = false
-
-	defer func() {
-		e := recover()
-		if e == zk.ErrConnectionClosed {
-			//try reconnect the zk server
-			log.Println("connection closed, reconnect to the zk server")
-			os.Exit(-1)
-		}
-	}()
-	this.innerLock.Lock()
-	defer this.innerLock.Unlock()
-	//create znode
+func (this *Dlocker) createZnodePath() (string, error) {
 	path := this.basePath + "/" + this.prefix
-	var err error
-	this.lockerPath, err = getZkConn().Create(path, []byte(""), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(zk.PermAll))
-	//get children and check is the created locker is the minimum znode
-	chidren, _, err := getZkConn().Children(this.basePath)
-	if err != nil {
-		panic(err)
-	}
-	minIndex := modules.GetMinIndex(chidren, this.prefix)
-	minLockerPath := this.basePath + "/" + chidren[minIndex]
-	// if the created znode is not the minimum znode,
-	// listen for the pre-znode delete notification
-	if minLockerPath != this.lockerPath {
-		lastNodeName := modules.GetLastNodeName(this.lockerPath,
-			this.basePath, this.prefix)
-		watchPath := this.basePath + "/" + lastNodeName
-		isExist, _, watch, err := getZkConn().ExistsW(watchPath)
-		if err != nil {
-			panic(err)
-		}
-		if isExist {
-			select {
-			case event := <-watch:
-				if event.Type == zk.EventNodeDeleted {
-					isExist, _, err = getZkConn().Exists(this.lockerPath)
-					if isExist && err == nil {
-						isSuccess = true
-					} else {
-						isSuccess = false
-					}
-				} else {
-					isSuccess = false
-				}
-				return
-			case <-time.After(this.timeout):
-				// if timeout, delete all the node less than created locker node
-				deleteStrs := modules.GetStrsSequenceLessThanLocker(chidren, this.basePath, this.prefix, this.lockerPath)
-				for i := 0; i < len(deleteStrs); i++ {
-					deleteStr := this.basePath + "/" + deleteStrs[i]
-					log.Println("timeout,delete", deleteStr, "")
-					getZkConn().Delete(deleteStr, 0)
-				}
-				isSuccess = false
-			}
-		}
-	} else { // if the created node is the minimum znode, getLock success
-		isSuccess = true
-	}
-	return
+	return getZkConn().Create(path, []byte(""), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(zk.PermAll))
 }
 
+//get the path of minimum serial number znode from sequential children
+func (this *Dlocker) getMinZnodePath() (string, error) {
+	children, err := this.getPathChildren()
+	if err != nil {
+		return "", err
+	}
+	minSNum := modules.GetMinSerialNumber(children, this.prefix)
+	minZnodePath := this.basePath + "/" + children[minSNum]
+	return minZnodePath, nil
+}
+
+//get the children of basePath znode
+func (this *Dlocker) getPathChildren() ([]string, error) {
+	children, _, err := getZkConn().Children(this.basePath)
+	return children, err
+}
+
+//get the last znode of created znode
+func (this *Dlocker) getLastZnodePath() string {
+	return modules.GetLastNodeName(this.lockerPath,
+		this.basePath, this.prefix)
+}
+
+//just list mutex.Lock()
+func (this *Dlocker) Lock() {
+	for !this.lock() {
+	}
+}
+
+//just list mutex.Unlock()
 func (this *Dlocker) Unlock() (isSuccess bool) {
 	isSuccess = false
 	defer func() {
@@ -116,10 +83,81 @@ func (this *Dlocker) Unlock() (isSuccess bool) {
 	if err == zk.ErrNoNode {
 		isSuccess = false
 		return
-	} else if err != nil {
-		log.Println(err.Error())
-		panic(err)
+	} else {
+		this.checkErr(err)
 	}
 	isSuccess = true
 	return
+}
+
+func (this *Dlocker) lock() (isSuccess bool) {
+	isSuccess = false
+	defer func() {
+		e := recover()
+		if e == zk.ErrConnectionClosed {
+			//try reconnect the zk server
+			log.Println("connection closed, reconnect to the zk server")
+			reConnectZk()
+		}
+	}()
+	this.innerLock.Lock()
+	defer this.innerLock.Unlock()
+	//create a znode for the locker path
+	var err error
+	this.lockerPath, err = this.createZnodePath()
+	this.checkErr(err)
+
+	//get the znode which get the lock
+	minZnodePath, err := this.getMinZnodePath()
+	this.checkErr(err)
+
+	if minZnodePath == this.lockerPath {
+		// if the created node is the minimum znode, getLock success
+		isSuccess = true
+	} else {
+		// if the created znode is not the minimum znode,
+		// listen for the pre-znode delete notification
+		lastNodeName := this.getLastZnodePath()
+		watchPath := this.basePath + "/" + lastNodeName
+		isExist, _, watch, err := getZkConn().ExistsW(watchPath)
+		this.checkErr(err)
+		if isExist {
+			select {
+			//get lastNode been deleted event
+			case event := <-watch:
+				if event.Type == zk.EventNodeDeleted {
+					//check out the lockerPath existence
+					isExist, _, err = getZkConn().Exists(this.lockerPath)
+					this.checkErr(err)
+					if isExist {
+						//checkout the minZnodePath is equal to the lockerPath
+						minZnodePath, err := this.getMinZnodePath()
+						this.checkErr(err)
+						if minZnodePath == this.lockerPath {
+							isSuccess = true
+						}
+					}
+				}
+			//time out
+			case <-time.After(this.timeout):
+				// if timeout, delete all the node less than created locker node
+				children, err := this.getPathChildren()
+				this.checkErr(err)
+				deletePathList := modules.GetPathListSerialNumberLessThanLocker(children, this.basePath, this.prefix, this.lockerPath)
+				for i := 0; i < len(deletePathList); i++ {
+					deletePath := deletePathList[i]
+					log.Println("timeout,delete", deletePath, "")
+					getZkConn().Delete(deletePath, 0)
+				}
+			}
+		}
+	}
+	return
+}
+
+func (this *Dlocker) checkErr(err error) {
+	if err != nil {
+		log.Println(err)
+		panic(err)
+	}
 }
