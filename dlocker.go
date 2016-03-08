@@ -16,11 +16,11 @@ type Dlocker struct {
 	innerLock  *sync.Mutex
 }
 
-func NewLocker(path string, prefix string, timeout time.Duration) *Dlocker {
+func NewLocker(path string, timeout time.Duration) *Dlocker {
 
 	var locker Dlocker
 	locker.basePath = path
-	locker.prefix = prefix
+	locker.prefix = "lock-" //the prefix of a znode, everything is okay
 	locker.timeout = timeout
 	locker.innerLock = &sync.Mutex{}
 	isExsit, _, err := getZkConn().Exists(path)
