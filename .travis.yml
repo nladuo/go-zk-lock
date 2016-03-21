@@ -1,0 +1,11 @@
+language: go
+
+go:
+    - 1.5
+    - tip
+
+script:
+    - go test -v ./...
+
+install:
+    - go get github.com/samuel/go-zookeeper/zk
