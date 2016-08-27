@@ -1,7 +1,7 @@
 package DLocker
 
 import (
-	"github.com/nladuo/DLocker/modules"
+	"github.com/nladuo/go-zk-lock/modules"
 	"github.com/samuel/go-zookeeper/zk"
 	"log"
 	"strconv"

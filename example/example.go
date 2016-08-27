@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/nladuo/DLocker"
+	"github.com/nladuo/go-zk-lock"
 	"log"
 	"time"
 )
