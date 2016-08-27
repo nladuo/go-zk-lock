@@ -1,4 +1,4 @@
-# DLocker
+# go-zk-lock
 [![Build Status](https://travis-ci.org/nladuo/DLocker.svg)](https://travis-ci.org/nladuo/DLocker)
 
 a distributed locker based on zookeeper and implemented in golang.
