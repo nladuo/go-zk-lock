@@ -6,7 +6,7 @@ a distributed locker based on zookeeper and implemented in golang.
 # Installation
 ```go
 go get github.com/samuel/go-zookeeper/zk
-go get github.com/nladuo/DLocker
+go get github.com/nladuo/go-zk-lock
 ```
 
 # Usage
